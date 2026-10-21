@@ -1,0 +1,67 @@
+From 2a4baa5735374d500098a702267d5f9c9e9082c7 Mon Sep 17 00:00:00 2001
+From: JTSDM <145882902+JTSDM@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 00:57:34 +0800
+Subject: [PATCH] =?UTF-8?q?fix:=20=E6=97=A5=E6=9C=9F=20key=20=E6=94=B9?=
+ =?UTF-8?q?=E7=94=A8=20ISO=20=E6=A0=BC=E5=BC=8F=EF=BC=8C=E4=BF=AE=E5=A4=8D?=
+ =?UTF-8?q?=E7=83=AD=E5=8A=9B=E5=9B=BE=E8=B7=A8=E6=9C=88=E6=8E=92=E5=BA=8F?=
+ =?UTF-8?q?=E9=94=99=E4=B9=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+日活热力图（renderHeat）、每日模型用量堆叠柱（renderDailyModel）和工作空间
+迷你热力图都依赖 Object.keys(...).sort() 的字符串字典序，而 fdate() 返回的
+是 "9-30" 这种 M-D 格式（无年份、月份不补零）。字典序里 "10-*" < "9-*"，
+跨月后顺序倒挂，31 天窗口实测：
+
+  修复前：9-30 9-29 … 9-22 10-22 10-21 … 10-01
+  修复后：10-22 10-21 … 10-01 09-30 … 09-22
+
+改动 3 处：
+- fdate() 输出 YYYY-MM-DD，key 的字典序即时间序，顺带修正跨年排序
+- 热力图行标签、每日模型图 X 轴标签改用 d.slice(5)，只显示 MM-DD
+- tooltip / 明细表 / 会话详情保留完整日期，比原来的 "9-30" 更明确
+
+验证：31 天窗口下热力图行标签严格降序（false → true），每日模型图 X 轴由
+"10-01 … 10-21 9-25 9-30" 变为 "09-22 … 10-22" 连续升序。
+
+注：renderHeat 里的 .reverse() 保留，它表达「最新日期在上」的既有设计意图，
+本次只修排序基数。
+---
+ scripts/gen_dashboard.py | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/scripts/gen_dashboard.py b/scripts/gen_dashboard.py
+index 3f62997..3d098d1 100644
+--- a/scripts/gen_dashboard.py
++++ b/scripts/gen_dashboard.py
+@@ -343,7 +343,7 @@ function fmt(n){if(n>=1e8)return (n/1e8).toFixed(2)+' 亿';if(n>=1e4)return (n/1
+ const nf=n=>n.toLocaleString('en-US');
+ const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+ function hm(n){return new Date(n*60000);}
+-function fdate(d){const p=x=>String(x).padStart(2,'0');return (d.getMonth()+1)+'-'+p(d.getDate());}
++function fdate(d){const p=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+ function ftime(d){const p=x=>String(x).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes());}
+ 
+ function iterReq(cb){
+@@ -407,7 +407,7 @@ function renderHeat(A){
+   const avg=A.tot/(dates.length||1);
+   const wrap=$('#heatWrap');let html='';
+   for(const d of dates){
+-    html+='<div class="hrow"><div class="hlab">'+d+'</div>';
++    html+='<div class="hrow"><div class="hlab">'+d.slice(5)+'</div>';
+     for(let i=0;i<72;i++){
+       const v=A.daily[d].hh?A.daily[d].hh[i]:0;
+       const lv=v==0?0:Math.min(7,Math.max(1,1+Math.floor(Math.log(v/avg/0.001)/Math.log(350)*7)));
+@@ -575,7 +575,7 @@ function renderDailyModel(A){
+     const dayTip=d+' · 合计 '+nf(dtt)+'\n'+dayList.map(o=>'· '+(o.mi===-1?'其他':D.models[o.mi])+'  '+nf(o.v)+'（'+(dtt?(o.v/dtt*100).toFixed(1):0)+'%）').join('\n');
+     bars+='<rect x="'+(pL+pitch*i).toFixed(1)+'" y="'+pT+'" width="'+pitch.toFixed(1)+'" height="'+(H-pT-pB)+'" fill="#fff" fill-opacity="0" pointer-events="all" data-tip="'+dayTip+'"/>';
+     const step=Math.ceil(n/7);
+-    if(i%step===0||i===n-1)xlabels+='<text x="'+(pL+pitch*i+pitch/2)+'" y="'+(H-4)+'" font-size="9" fill="'+CJ.axis+'" text-anchor="middle">'+d+'</text>';
++    if(i%step===0||i===n-1)xlabels+='<text x="'+(pL+pitch*i+pitch/2)+'" y="'+(H-4)+'" font-size="9" fill="'+CJ.axis+'" text-anchor="middle">'+d.slice(5)+'</text>';
+   });
+   svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);
+   svg.innerHTML=g+bars+xlabels+
+-- 
+2.55.0.windows.3
+

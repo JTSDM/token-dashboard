@@ -1,5 +1,15 @@
 # workbuddy-token-dashboard
 
+> **这是一个打过补丁的 fork。** 基于 [fuyi-git/token-dashboard](https://github.com/fuyi-git/token-dashboard)，只含 1 个修复（3 行），其余与上游完全一致。
+>
+> - **修的问题**：日活热力图、每日模型用量堆叠柱、工作空间迷你热力图的**跨月日期排序错乱**。`fdate()` 返回 `9-30` 这种 `M-D` 格式（无年份、月份不补零），而这几张图都按 `Object.keys(...).sort()` 的字符串字典序排，字典序里 `"10-*" < "9-*"`，一跨月顺序就倒挂。
+> - **改动**：`fdate()` 改为输出 `YYYY-MM-DD`（key 的字典序即时间序，顺带修正跨年），两处轴标签用 `d.slice(5)` 只显示 `MM-DD`。展示逻辑未动。
+> - **上游 PR**：[#3](https://github.com/fuyi-git/token-dashboard/pull/3)（作者暂未回应）
+> - **与上游差异**：`1 file changed, 3 insertions(+), 3 deletions(-)`，可用 `git diff upstream/main` 自行核对
+> - **只想打补丁不换仓库**：`git apply token-dashboard-date-sort.patch`，或直接从 [PR #3](https://github.com/fuyi-git/token-dashboard/pull/3/files) 复制那 3 行
+>
+> 安装方式与上游完全相同，见下方「安装（作为 Skill）」。
+
 把 WorkBuddy 的真实 token 消耗变成一张**单文件离线看板**。作为一个 WorkBuddy Skill 分发：别人加载后说一句"看看我的 token 用量"，Agent 就会扫描本机会话日志，生成同款看板并打开。
 
 ## 功能
@@ -28,7 +38,7 @@
 - macOS / Linux：`~/.workbuddy/skills/token-dashboard/`
 
 ```bash
-git clone <本仓库地址> ~/.workbuddy/skills/token-dashboard
+git clone https://github.com/JTSDM/token-dashboard ~/.workbuddy/skills/token-dashboard
 ```
 
 重启 WorkBuddy 会话即可加载。之后直接说"看看我的 token 用量"即可触发。
